@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tetris - บล็อกหรรษา</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #0f172a; /* slate-900 */
+            color: #f8fafc; /* slate-50 */
+            touch-action: manipulation;
+        }
+        
+        /* Game Canvas Styles */
+        .game-wrapper {
+            width: min(100%, 33vh, 300px);
+            aspect-ratio: 1 / 2;
+            margin: 0 auto;
+        }
+
+        #game-board {
+            background-color: #1e293b; /* slate-800 */
+            border: 2px solid #334155;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        
+        #next-piece-board {
+            background-color: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 120px;
+            height: auto;
+            aspect-ratio: 1 / 1;
+        }
+
+        /* Custom Scrollbar for Reviews */
+        .reviews-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .reviews-container::-webkit-scrollbar-track {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        .reviews-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        /* Star Rating Styles */
+        .star {
+            cursor: pointer;
+            transition: color 0.2s, transform 0.1s;
+        }
+        .star:hover {
+            transform: scale(1.1);
+        }
+
+        /* Overlay Styles */
+        #game-overlay {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Mobile Controls */
+        .ctrl-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            user-select: none;
+            transition: background 0.1s;
+        }
+        .ctrl-btn:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .ctrl-btn-action {
+            border-radius: 12px;
+            width: auto;
+            padding: 0 20px;
+        }
+
+        /* Toast Notification */
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            background-color: #10b981; /* emerald-500 */
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transform: translateX(120%);
+            transition: transform 0.3s ease-in-out;
+        }
+        .toast.show {
+            transform: translateX(0);
+        }
+        .toast.error {
+            background-color: #ef4444; /* red-500 */
+        }
+    </style>
+</head>
+<body class="min-h-screen py-8 px-4 flex flex-col items-center">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- Game Over, Survey & Reviews Modal -->
+    <div id="game-over-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-md hidden p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-6 md:p-8 max-w-4xl w-full max-h-[95vh] overflow-y-auto flex flex-col md:flex-row gap-6 md:gap-8">
+            
+            <!-- Left Column: Score & Survey -->
+            <div class="flex-1 flex flex-col">
+                <h2 class="text-3xl font-bold text-red-500 mb-2 text-center drop-shadow-md">Game Over!</h2>
+                <p id="modal-score-text" class="text-slate-300 text-center mb-4 font-medium">คะแนน: 0 | เคลียร์ได้: 0 แถว</p>
+                
+                <div id="survey-form-container" class="flex-1">
+                    <hr class="border-slate-700/50 my-4">
+                    <h3 class="text-lg font-bold mb-4 text-center text-white"><i class="fa-solid fa-star text-yellow-400 mr-2"></i>ประเมินความพึงพอใจ</h3>
+                    
+                    <div class="mb-4 text-center">
+                        <label class="block text-slate-300 text-sm font-medium mb-2">คุณพึงพอใจกับเกมนี้มากน้อยเพียงใด?</label>
+                        <div id="star-rating" class="flex justify-center gap-2 text-3xl text-slate-600 mb-1">
+                            <i class="fa-solid fa-star star" data-value="1"></i>
+                            <i class="fa-solid fa-star star" data-value="2"></i>
+                            <i class="fa-solid fa-star star" data-value="3"></i>
+                            <i class="fa-solid fa-star star" data-value="4"></i>
+                            <i class="fa-solid fa-star star" data-value="5"></i>
+                        </div>
+                        <p id="rating-text" class="text-sm font-medium text-emerald-400 h-5">กรุณาเลือกดาว</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="feedback-name" class="block text-slate-300 text-sm font-medium mb-2">ชื่อของคุณ</label>
+                        <input type="text" id="feedback-name" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors shadow-inner mb-3" placeholder="ระบุชื่อของคุณ (เช่น นามแฝง)">
+                        
+                        <label for="feedback-text" class="block text-slate-300 text-sm font-medium mb-2">ความคิดเห็นเพิ่มเติม</label>
+                        <textarea id="feedback-text" rows="2" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors shadow-inner" placeholder="คุณมีข้อเสนอแนะอะไรบอกเราได้นะ..."></textarea>
+                    </div>
+
+                    <button id="btn-submit-feedback" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl shadow-lg transition-colors flex justify-center items-center gap-2 mb-2">
+                        <i class="fa-solid fa-paper-plane"></i> ส่งความคิดเห็น
+                    </button>
+                </div>
+
+                <div id="survey-success-msg" class="hidden text-center flex-1 flex flex-col justify-center py-6 mb-4">
+                    <i class="fa-solid fa-circle-check text-5xl text-emerald-500 mb-4 drop-shadow-md"></i>
+                    <p class="text-white font-medium text-lg">ขอบคุณสำหรับความคิดเห็น!</p>
+                </div>
+
+                <hr class="border-slate-700/50 my-4">
+
+                <button id="btn-play-again" class="w-full bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-white font-bold py-3.5 rounded-xl shadow-lg transition-transform transform hover:scale-[1.02] active:scale-95 text-lg">
+                    เล่นอีกครั้ง (Play Again)
+                </button>
+            </div>
+
+            <!-- Right Column: Reviews Display -->
+            <div class="flex-1 flex flex-col border-t md:border-t-0 md:border-l border-slate-700 pt-6 md:pt-0 md:pl-8">
+                <h2 class="text-xl md:text-2xl font-bold mb-4 text-center text-white"><i class="fa-solid fa-comments text-blue-400 mr-2"></i>รีวิวจากผู้เล่น</h2>
+                
+                <div class="flex flex-col h-full">
+                    <!-- Average Stats Box -->
+                    <div class="flex justify-around items-center mb-4 p-3 bg-slate-900/80 rounded-xl border border-slate-700 shadow-inner">
+                        <div class="text-center">
+                            <p class="text-slate-400 text-[10px] md:text-xs uppercase mb-1">คะแนนเฉลี่ย</p>
+                            <div class="flex items-baseline gap-1 justify-center">
+                                <span id="avg-score" class="text-3xl md:text-4xl font-bold text-yellow-400">0.0</span>
+                                <span class="text-slate-500 text-sm">/ 5</span>
+                            </div>
+                        </div>
+                        <div class="w-px h-10 bg-slate-700"></div>
+                        <div class="text-center">
+                            <p class="text-slate-400 text-[10px] md:text-xs uppercase mb-1">จำนวนผู้ประเมิน</p>
+                            <p id="total-reviews" class="text-2xl md:text-3xl font-bold text-white">0 <span class="text-sm font-normal text-slate-400">คน</span></p>
+                        </div>
+                    </div>
+
+                    <!-- Scrollable Reviews List -->
+                    <div id="reviews-list" class="reviews-container flex-1 bg-slate-900/50 rounded-xl border border-slate-700 p-4 overflow-y-auto min-h-[200px] max-h-[300px] md:max-h-full md:flex-auto flex flex-col gap-3 shadow-inner">
+                        <!-- Reviews will be injected here -->
+                        <div class="text-center text-slate-500 text-sm py-4">ยังไม่มีความคิดเห็น เป็นคนแรกที่รีวิวสิ!</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="max-w-5xl w-full">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 drop-shadow-lg mb-2">
+                <i class="fa-solid fa-gamepad mr-2 text-emerald-400"></i>Tetris
+            </h1>
+            <p class="text-slate-400 text-sm md:text-base">เกมเรียงบล็อกสุดคลาสสิก เล่นเพลิน ฝึกสมอง</p>
+        </header>
+
+        <!-- Main Game Section -->
+        <div class="flex flex-col lg:flex-row gap-6 justify-center items-start mb-12">
+            
+            <!-- Left Stats Panel -->
+            <div class="w-full lg:w-48 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 flex flex-row lg:flex-col gap-4 justify-between">
+                <div class="stat-box bg-slate-900 p-3 rounded-lg border border-slate-700 text-center flex-1">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">คะแนนสูงสุด</p>
+                    <p id="ui-high-score" class="text-xl font-bold text-yellow-400">0</p>
+                </div>
+                <div class="stat-box bg-slate-900 p-3 rounded-lg border border-slate-700 text-center flex-1">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">คะแนน (Score)</p>
+                    <p id="ui-score" class="text-xl font-bold text-white">0</p>
+                </div>
+                <div class="stat-box bg-slate-900 p-3 rounded-lg border border-slate-700 text-center flex-1">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">แถว (Lines)</p>
+                    <p id="ui-lines" class="text-xl font-bold text-blue-400">0</p>
+                </div>
+                <div class="stat-box bg-slate-900 p-3 rounded-lg border border-slate-700 text-center flex-1">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">ระดับ (Level)</p>
+                    <p id="ui-level" class="text-xl font-bold text-emerald-400">1</p>
+                </div>
+                
+                <!-- Time Box (Hidden by default, shown in Time/Sprint modes) -->
+                <div id="stat-time-container" class="stat-box bg-slate-900 p-3 rounded-lg border border-slate-700 text-center flex-1 hidden">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">เวลา (Time)</p>
+                    <p id="ui-time" class="text-xl font-bold text-pink-400">0:00</p>
+                </div>
+            </div>
+
+            <!-- Center Game Board -->
+            <div class="game-wrapper relative mx-auto touch-none flex justify-center">
+                <!-- 10 cols x 20 rows logical, scaled to 300x600 via JS -->
+                <canvas id="game-board" width="300" height="600"></canvas>
+                
+                <!-- Overlay (Start / Pause / Game Over) -->
+                <div id="game-overlay" class="absolute inset-0 flex flex-col items-center justify-center rounded-lg z-10 w-full h-full text-center p-2 bg-slate-900/85 backdrop-blur-sm">
+                    <h2 id="overlay-title" class="text-2xl sm:text-4xl font-bold text-white mb-2 md:mb-4 drop-shadow-md">พร้อมไหม?</h2>
+                    <p id="overlay-subtitle" class="text-xs sm:text-sm text-slate-300 mb-4 px-2">เลือกโหมดและกดปุ่มเริ่มเกม</p>
+                    
+                    <!-- Game Mode Selection -->
+                    <div id="mode-selection" class="flex flex-col gap-2 mb-4 w-full max-w-[200px] mx-auto text-sm text-left">
+                        <label class="cursor-pointer relative">
+                            <input type="radio" name="gamemode" value="classic" class="peer sr-only" checked>
+                            <div class="p-2 bg-slate-800 border-2 border-slate-600 rounded-lg peer-checked:border-emerald-500 peer-checked:bg-slate-700 text-slate-300 peer-checked:text-white transition-all hover:bg-slate-700 shadow-inner">
+                                🎮 คลาสสิก
+                            </div>
+                        </label>
+                        <label class="cursor-pointer relative">
+                            <input type="radio" name="gamemode" value="time" class="peer sr-only">
+                            <div class="p-2 bg-slate-800 border-2 border-slate-600 rounded-lg peer-checked:border-pink-500 peer-checked:bg-slate-700 text-slate-300 peer-checked:text-white transition-all hover:bg-slate-700 shadow-inner">
+                                ⏳ แข่งเวลา (2 นาที)
+                            </div>
+                        </label>
+                        <label class="cursor-pointer relative">
+                            <input type="radio" name="gamemode" value="sprint" class="peer sr-only">
+                            <div class="p-2 bg-slate-800 border-2 border-slate-600 rounded-lg peer-checked:border-blue-500 peer-checked:bg-slate-700 text-slate-300 peer-checked:text-white transition-all hover:bg-slate-700 shadow-inner">
+                                ⚡ สปรินต์ (40 แถว)
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button id="btn-start" class="bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-white font-semibold py-2 px-6 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                            เริ่มเกม (Start)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Next Piece Panel -->
+            <div class="w-full lg:w-48 flex flex-row lg:flex-col gap-6">
+                <!-- Next Piece -->
+                <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 text-center flex-1 lg:flex-none">
+                    <p class="text-sm text-slate-400 uppercase tracking-wider mb-3">บล็อกถัดไป</p>
+                    <canvas id="next-piece-board" width="120" height="120"></canvas>
+                </div>
+
+                <!-- Controls Guide (Desktop) -->
+                <div class="hidden lg:block bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 text-sm">
+                    <p class="text-slate-300 font-semibold mb-3 border-b border-slate-700 pb-2">การควบคุม (Keyboard)</p>
+                    <ul class="space-y-2 text-slate-400">
+                        <li><kbd class="bg-slate-700 px-2 py-1 rounded text-white text-xs">↑</kbd> หมุนบล็อก</li>
+                        <li><kbd class="bg-slate-700 px-2 py-1 rounded text-white text-xs">←</kbd> <kbd class="bg-slate-700 px-2 py-1 rounded text-white text-xs">→</kbd> ซ้าย/ขวา</li>
+                        <li><kbd class="bg-slate-700 px-2 py-1 rounded text-white text-xs">↓</kbd> ลงเร็ว</li>
+                        <li><kbd class="bg-slate-700 px-2 py-1 rounded text-white text-xs">Space</kbd> ปล่อยลงทันที</li>
+                        <li><kbd class="bg-slate-700 px-2 py-1 rounded text-white text-xs">P</kbd> พัก/เล่นต่อ</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Controls & Touch Guide -->
+        <div class="lg:hidden flex justify-between items-center mb-6 max-w-sm mx-auto px-2">
+            <button id="btn-pause-mobile" class="bg-slate-800 border border-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow flex-1 mr-2 active:bg-slate-700"><i class="fa-solid fa-pause mr-1"></i> พักเกม</button>
+            <div class="text-xs text-slate-400 flex-1 ml-2 text-right">
+                <i class="fa-solid fa-hand-pointer mr-1"></i> ปัดจอเพื่อขยับ<br>แตะเพื่อหมุน
+            </div>
+        </div>
+
+        <hr class="border-slate-700/50 my-8">
+        
+        <footer class="text-center text-slate-500 text-sm pb-8">
+            <p>&copy; 2024 Tetris Web Game. พัฒนาด้วย HTML, CSS & Vanilla JS</p>
+        </footer>
+    </div>
+
+<script>
+/** 
+ * ==========================================
+ * TOAST NOTIFICATION SYSTEM
+ * ==========================================
+ */
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type === 'error' ? 'error' : ''}`;
+    toast.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'} mr-2"></i>${message}`;
+    
+    container.appendChild(toast);
+    
+    // Trigger animation
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            container.removeChild(toast);
+        }, 300); // Wait for transition out
+    }, 3000);
+}
+
+/** 
+ * ==========================================
+ * FEEDBACK SYSTEM LOGIC
+ * ==========================================
+ */
+const STORAGE_KEY_REVIEWS = 'tetris_reviews';
+let currentRating = 0;
+const ratingTexts = {
+    1: '⭐ 1 ดาว = ควรปรับปรุง',
+    2: '⭐⭐ 2 ดาว = พอใช้',
+    3: '⭐⭐⭐ 3 ดาว = ปานกลาง',
+    4: '⭐⭐⭐⭐ 4 ดาว = ดี',
+    5: '⭐⭐⭐⭐⭐ 5 ดาว = ดีมาก'
+};
+
+// Initialize Stars
+const stars = document.querySelectorAll('.star');
+const ratingTextDisplay = document.getElementById('rating-text');
+
+function updateStars(hoverValue = 0) {
+    const valueToUse = hoverValue || currentRating;
+    stars.forEach(star => {
+        const starValue = parseInt(star.getAttribute('data-value'));
+        if (starValue <= valueToUse) {
+            star.classList.remove('text-slate-600');
+            star.classList.add('text-yellow-400');
+        } else {
+            star.classList.add('text-slate-600');
+            star.classList.remove('text-yellow-400');
+        }
+    });
+
+    if (valueToUse > 0) {
+        ratingTextDisplay.textContent = ratingTexts[valueToUse];
+    } else {
+        ratingTextDisplay.textContent = 'กรุณาเลือกดาว';
+        ratingTextDisplay.className = 'text-sm font-medium text-slate-400 h-5';
+    }
+}
+
+stars.forEach(star => {
+    star.addEventListener('mouseover', (e) => {
+        updateStars(parseInt(e.target.getAttribute('data-value')));
+    });
+    star.addEventListener('mouseout', () => {
+        updateStars();
+    });
+    star.addEventListener('click', (e) => {
+        currentRating = parseInt(e.target.getAttribute('data-value'));
+        ratingTextDisplay.className = 'text-sm font-medium text-emerald-400 h-5';
+        updateStars();
+    });
+});
+
+// Load and Render Reviews
+function loadReviews() {
+    const reviewsJSON = localStorage.getItem(STORAGE_KEY_REVIEWS);
+    return reviewsJSON ? JSON.parse(reviewsJSON) : [];
+}
+
+function saveReview(rating, comment, name) {
+    const reviews = loadReviews();
+    const newReview = {
+        rating,
+        name: name.trim() || 'ผู้เล่นนิรนาม',
+        comment: comment.trim() || 'ไม่มีข้อความ',
+        date: new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    };
+    reviews.unshift(newReview); // Add to top
+    localStorage.setItem(STORAGE_KEY_REVIEWS, JSON.stringify(reviews));
+    renderReviewsUI();
+}
+
+function escapeHTML(str) {
+    return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+    );
+}
+
+function renderReviewsUI() {
+    const reviews = loadReviews();
+    const listContainer = document.getElementById('reviews-list');
+    const avgScoreEl = document.getElementById('avg-score');
+    const totalReviewsEl = document.getElementById('total-reviews');
+
+    totalReviewsEl.innerHTML = `${reviews.length} <span class="text-sm font-normal text-slate-400">คน</span>`;
+    
+    if (reviews.length === 0) {
+        avgScoreEl.textContent = '0.0';
+        listContainer.innerHTML = '<div class="text-center text-slate-500 text-sm py-4">ยังไม่มีความคิดเห็น เป็นคนแรกที่รีวิวสิ!</div>';
+        return;
+    }
+
+    const sum = reviews.reduce((acc, curr) => acc + curr.rating, 0);
+    const avg = (sum / reviews.length).toFixed(1);
+    avgScoreEl.textContent = avg;
+
+    listContainer.innerHTML = '';
+    reviews.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'bg-slate-800 p-3 rounded-lg border border-slate-700 text-sm';
+        
+        let starsHTML = '';
+        for(let i=1; i<=5; i++) {
+            starsHTML += `<i class="fa-solid fa-star ${i <= r.rating ? 'text-yellow-400' : 'text-slate-600'} text-xs"></i>`;
+        }
+        
+        const reviewerName = r.name || 'ผู้เล่นนิรนาม';
+
+        div.innerHTML = `
+            <div class="flex justify-between items-center mb-1">
+                <div>${starsHTML}</div>
+                <div class="text-xs text-slate-500">${r.date}</div>
+            </div>
+            <p class="text-xs text-emerald-400 font-semibold mb-1"><i class="fa-solid fa-user-circle mr-1"></i>${escapeHTML(reviewerName)}</p>
+            <p class="text-slate-300 break-words">${escapeHTML(r.comment)}</p>
+        `;
+        listContainer.appendChild(div);
+    });
+}
+
+// Submit Button Handler
+document.getElementById('btn-submit-feedback').addEventListener('click', () => {
+    if (currentRating === 0) {
+        showToast('กรุณาเลือกดาวเพื่อประเมินความพึงพอใจก่อนส่ง', 'error');
+        return;
+    }
+    
+    const name = document.getElementById('feedback-name').value;
+    const comment = document.getElementById('feedback-text').value;
+    saveReview(currentRating, comment, name);
+    
+    // Switch to success view in modal
+    document.getElementById('survey-form-container').classList.add('hidden');
+    document.getElementById('survey-success-msg').classList.remove('hidden');
+    showToast('ส่งความคิดเห็นเรียบร้อยแล้ว!', 'success');
+});
+
+// Initial Render Reviews
+renderReviewsUI();
+
+
+/** 
+ * ==========================================
+ * TETRIS GAME LOGIC
+ * ==========================================
+ */
+const canvas = document.getElementById('game-board');
+const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('next-piece-board');
+const nextCtx = nextCanvas.getContext('2d');
+
+const ROWS = 20;
+const COLS = 10;
+const BLOCK_SIZE = 30; // Logical size, scaled via CSS
+const NEXT_BLOCK_SIZE = 24;
+
+// Colors for the 7 Tetrominoes (1-7), 0 is empty
+const COLORS = [
+    null,
+    '#06b6d4', // I - Cyan
+    '#3b82f6', // J - Blue
+    '#f97316', // L - Orange
+    '#eab308', // O - Yellow
+    '#22c55e', // S - Green
+    '#a855f7', // T - Purple
+    '#ef4444'  // Z - Red
+];
+
+// Tetromino Matrices
+const PIECES = [
+    [], // Empty for 1-based indexing
+    // I
+    [
+        [0, 1, 0, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 0]
+    ],
+    // J
+    [
+        [0, 2, 0],
+        [0, 2, 0],
+        [2, 2, 0]
+    ],
+    // L
+    [
+        [0, 3, 0],
+        [0, 3, 0],
+        [0, 3, 3]
+    ],
+    // O
+    [
+        [4, 4],
+        [4, 4]
+    ],
+    // S
+    [
+        [0, 5, 5],
+        [5, 5, 0],
+        [0, 0, 0]
+    ],
+    // T
+    [
+        [0, 0, 0],
+        [6, 6, 6],
+        [0, 6, 0]
+    ],
+    // Z
+    [
+        [7, 7, 0],
+        [0, 7, 7],
+        [0, 0, 0]
+    ]
+];
+
+// Game State
+let board = [];
+let score = 0;
+let lines = 0;
+let level = 1;
+let highScore = localStorage.getItem('tetris_highscore') || 0;
+
+let dropCounter = 0;
+let dropInterval = 1000;
+let lastTime = 0;
+let requestID = null;
+
+let isPlaying = false;
+let isPaused = false;
+let isGameOver = false;
+
+const player = {
+    pos: {x: 0, y: 0},
+    matrix: null
+};
+
+let nextPieceMatrix = null;
+
+// Game Mode Variables
+let gameMode = 'classic';
+let gameTimer = 0;
+let timerInterval = null;
+const TIME_ATTACK_LIMIT = 120; // 2 minutes in seconds
+const SPRINT_LIMIT = 40; // 40 lines
+
+// UI Elements
+const uiScore = document.getElementById('ui-score');
+const uiLines = document.getElementById('ui-lines');
+const uiLevel = document.getElementById('ui-level');
+const uiHighScore = document.getElementById('ui-high-score');
+const uiTime = document.getElementById('ui-time');
+const statTimeContainer = document.getElementById('stat-time-container');
+const modeSelection = document.getElementById('mode-selection');
+
+const overlay = document.getElementById('game-overlay');
+const overlayTitle = document.getElementById('overlay-title');
+const overlaySubtitle = document.getElementById('overlay-subtitle');
+const btnStart = document.getElementById('btn-start');
+const gameOverModal = document.getElementById('game-over-modal');
+const btnPlayAgain = document.getElementById('btn-play-again');
+
+// Initialize UI
+uiHighScore.innerText = highScore;
+
+// Create Empty Board
+function createMatrix(w, h) {
+    const matrix = [];
+    while (h--) {
+        matrix.push(new Array(w).fill(0));
+    }
+    return matrix;
+}
+
+// Generate Random Piece
+function createPiece() {
+    const typeId = Math.floor(Math.random() * 7) + 1; // 1 to 7
+    // Deep copy matrix to avoid mutating original
+    return PIECES[typeId].map(row => [...row]);
+}
+
+function drawBlock(context, x, y, size, colorIndex) {
+    if (colorIndex === 0) return;
+    const color = COLORS[colorIndex];
+    
+    // Base block
+    context.fillStyle = color;
+    context.fillRect(x * size, y * size, size, size);
+    
+    // Highlight top-left (3D effect)
+    context.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    context.beginPath();
+    context.moveTo(x * size, y * size);
+    context.lineTo((x + 1) * size, y * size);
+    context.lineTo(x * size, (y + 1) * size);
+    context.fill();
+    
+    // Shadow bottom-right (3D effect)
+    context.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    context.beginPath();
+    context.moveTo((x + 1) * size, y * size);
+    context.lineTo((x + 1) * size, (y + 1) * size);
+    context.lineTo(x * size, (y + 1) * size);
+    context.fill();
+
+    // Border
+    context.strokeStyle = '#1e293b'; // slate-800
+    context.lineWidth = 1;
+    context.strokeRect(x * size, y * size, size, size);
+}
+
+function drawMatrix(context, matrix, offset, size) {
+    matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value !== 0) {
+                drawBlock(context, x + offset.x, y + offset.y, size, value);
+            }
+        });
+    });
+}
+
+function draw() {
+    // Clear Main Board
+    ctx.fillStyle = '#1e293b'; // Background
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw grid lines
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    for(let r=0; r<=ROWS; r++) {
+        ctx.beginPath(); ctx.moveTo(0, r*BLOCK_SIZE); ctx.lineTo(canvas.width, r*BLOCK_SIZE); ctx.stroke();
+    }
+    for(let c=0; c<=COLS; c++) {
+        ctx.beginPath(); ctx.moveTo(c*BLOCK_SIZE, 0); ctx.lineTo(c*BLOCK_SIZE, canvas.height); ctx.stroke();
+    }
+
+    drawMatrix(ctx, board, {x: 0, y: 0}, BLOCK_SIZE);
+    
+    // Draw Ghost Piece (where it will land)
+    let ghost = {
+        matrix: player.matrix,
+        pos: {x: player.pos.x, y: player.pos.y}
+    };
+    while (!collide(board, ghost)) {
+        ghost.pos.y++;
+    }
+    ghost.pos.y--; // Back up one to the valid spot
+    
+    // Draw ghost semi-transparent
+    ctx.globalAlpha = 0.2;
+    drawMatrix(ctx, ghost.matrix, ghost.pos, BLOCK_SIZE);
+    ctx.globalAlpha = 1.0;
+
+    // Draw active player piece
+    drawMatrix(ctx, player.matrix, player.pos, BLOCK_SIZE);
+}
+
+function drawNextPiece() {
+    nextCtx.fillStyle = '#1e293b';
+    nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+    
+    if (nextPieceMatrix) {
+        // Center the piece
+        let w = nextPieceMatrix[0].length;
+        let h = nextPieceMatrix.length;
+        let offsetX = (5 - w) / 2; // Next canvas is ~5 blocks wide
+        let offsetY = (5 - h) / 2;
+        drawMatrix(nextCtx, nextPieceMatrix, {x: offsetX, y: offsetY}, NEXT_BLOCK_SIZE);
+    }
+}
+
+function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function merge(board, player) {
+    player.matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value !== 0) {
+                // Ensure we don't write out of bounds if game over immediately
+                if (board[y + player.pos.y]) {
+                    board[y + player.pos.y][x + player.pos.x] = value;
+                }
+            }
+        });
+    });
+}
+
+function collide(board, player) {
+    const m = player.matrix;
+    const o = player.pos;
+    for (let y = 0; y < m.length; ++y) {
+        for (let x = 0; x < m[y].length; ++x) {
+            if (m[y][x] !== 0 &&
+               (board[y + o.y] && board[y + o.y][x + o.x]) !== 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function updateLevel() {
+    level = Math.floor(lines / 10) + 1;
+    uiLevel.innerText = level;
+    // Base speed 1000ms, decrease by 100ms each level, minimum 100ms
+    dropInterval = Math.max(100, 1000 - (level - 1) * 100);
+}
+
+function lineClear() {
+    let rowCount = 0;
+    outer: for (let y = board.length - 1; y >= 0; --y) {
+        for (let x = 0; x < board[y].length; ++x) {
+            if (board[y][x] === 0) {
+                continue outer;
+            }
+        }
+        
+        // Remove line and add new empty line at top
+        const row = board.splice(y, 1)[0].fill(0);
+        board.unshift(row);
+        ++y; // Check the same row index again because we shifted down
+        rowCount++;
+    }
+
+    if (rowCount > 0) {
+        lines += rowCount;
+        
+        // Original Nintendo scoring system logic approx
+        let lineScore = 0;
+        switch(rowCount) {
+            case 1: lineScore = 40; break;
+            case 2: lineScore = 100; break;
+            case 3: lineScore = 300; break;
+            case 4: lineScore = 1200; break;
+        }
+        score += lineScore * level;
+        
+        uiScore.innerText = score;
+        uiLines.innerText = lines;
+        updateLevel();
+
+        // Check Sprint mode win condition
+        if (gameMode === 'sprint' && lines >= SPRINT_LIMIT) {
+            gameOver("เคลียร์ 40 แถวสำเร็จ!");
+        }
+    }
+}
+
+function playerReset() {
+    if (!nextPieceMatrix) {
+        nextPieceMatrix = createPiece();
+    }
+    
+    player.matrix = nextPieceMatrix;
+    nextPieceMatrix = createPiece();
+    drawNextPiece();
+
+    player.pos.y = 0;
+    player.pos.x = (Math.floor(COLS / 2)) - (Math.floor(player.matrix[0].length / 2));
+
+    // Check Game Over
+    if (collide(board, player)) {
+        gameOver("Game Over!");
+    }
+}
+
+function gameOver(reason = "Game Over!") {
+    isGameOver = true;
+    isPlaying = false;
+    cancelAnimationFrame(requestID);
+    clearInterval(timerInterval);
+    
+    // Save highscore only in classic mode
+    if (score > highScore && gameMode === 'classic') {
+        highScore = score;
+        localStorage.setItem('tetris_highscore', highScore);
+        uiHighScore.innerText = highScore;
+    }
+    
+    // Hide pause overlay if active
+    overlay.classList.add('hidden');
+    
+    // Prepare Modal UI
+    const titleEl = gameOverModal.querySelector('h2');
+    titleEl.innerText = reason;
+    if (reason === "Game Over!" || reason === "หมดเวลา!") {
+        titleEl.className = "text-3xl font-bold text-red-500 mb-2 text-center drop-shadow-md";
+    } else {
+        titleEl.className = "text-3xl font-bold text-emerald-400 mb-2 text-center drop-shadow-md";
+    }
+
+    let timeStr = "";
+    if (gameMode !== 'classic') {
+        timeStr = ` | เวลา: ${formatTime(gameTimer)}`;
+    }
+    
+    const modeName = gameMode === 'time' ? 'Time Attack' : (gameMode === 'sprint' ? 'Sprint' : 'Classic');
+    document.getElementById('modal-score-text').innerText = `[โหมด ${modeName}] คะแนน: ${score} | เคลียร์ได้: ${lines} แถว${timeStr}`;
+    
+    document.getElementById('survey-form-container').classList.remove('hidden');
+    document.getElementById('survey-success-msg').classList.add('hidden');
+    
+    // Reset Form
+    currentRating = 0;
+    updateStars();
+    document.getElementById('feedback-name').value = '';
+    document.getElementById('feedback-text').value = '';
+
+    // Show Game Over Modal
+    gameOverModal.classList.remove('hidden');
+}
+
+function togglePause() {
+    if (isGameOver || !isPlaying) return;
+    
+    isPaused = !isPaused;
+    if (isPaused) {
+        overlay.classList.remove('hidden');
+        modeSelection.classList.add('hidden'); // Hide mode selection on pause
+        overlayTitle.innerText = "หยุดพัก";
+        overlayTitle.classList.remove('text-red-500');
+        overlayTitle.classList.add('text-white');
+        overlaySubtitle.innerText = "กด 'เล่นต่อ' เพื่อดำเนินการต่อ";
+        btnStart.innerText = "เล่นต่อ (Resume)";
+        document.getElementById('btn-pause-mobile').innerHTML = '<i class="fa-solid fa-play mr-1"></i> เล่น';
+    } else {
+        overlay.classList.add('hidden');
+        document.getElementById('btn-pause-mobile').innerHTML = '<i class="fa-solid fa-pause mr-1"></i> พัก';
+        lastTime = performance.now(); // Reset time to prevent instant drop
+        update();
+    }
+}
+
+function playerDrop() {
+    player.pos.y++;
+    if (collide(board, player)) {
+        player.pos.y--;
+        merge(board, player);
+        lineClear();
+        playerReset();
+    }
+    dropCounter = 0;
+}
+
+function hardDrop() {
+    while (!collide(board, player)) {
+        player.pos.y++;
+    }
+    player.pos.y--; // Step back to valid position
+    merge(board, player);
+    lineClear();
+    playerReset();
+    dropCounter = 0;
+}
+
+function playerMove(dir) {
+    player.pos.x += dir;
+    if (collide(board, player)) {
+        player.pos.x -= dir;
+    }
+}
+
+function rotateMatrix(matrix, dir) {
+    // Transpose
+    for (let y = 0; y < matrix.length; ++y) {
+        for (let x = 0; x < y; ++x) {
+            [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+        }
+    }
+    // Reverse
+    if (dir > 0) {
+        matrix.forEach(row => row.reverse());
+    } else {
+        matrix.reverse();
+    }
+}
+
+function playerRotate(dir) {
+    const pos = player.pos.x;
+    let offset = 1;
+    rotateMatrix(player.matrix, dir);
+    // Wall kick logic (basic)
+    while (collide(board, player)) {
+        player.pos.x += offset;
+        offset = -(offset + (offset > 0 ? 1 : -1));
+        if (offset > player.matrix[0].length) {
+            // Revert rotation if failed
+            rotateMatrix(player.matrix, -dir);
+            player.pos.x = pos;
+            return;
+        }
+    }
+}
+
+function update(time = 0) {
+    if (isPaused || isGameOver || !isPlaying) return;
+
+    const deltaTime = time - lastTime;
+    lastTime = time;
+
+    dropCounter += deltaTime;
+    if (dropCounter > dropInterval) {
+        playerDrop();
+    }
+
+    draw();
+    requestID = requestAnimationFrame(update);
+}
+
+function startGame() {
+    // Read Game Mode
+    const selectedModeEl = document.querySelector('input[name="gamemode"]:checked');
+    if (selectedModeEl) {
+        gameMode = selectedModeEl.value;
+    }
+
+    board = createMatrix(COLS, ROWS);
+    score = 0;
+    lines = 0;
+    level = 1;
+    dropInterval = 1000;
+    
+    uiScore.innerText = score;
+    uiLines.innerText = lines;
+    uiLevel.innerText = level;
+    
+    // Timer Setup
+    clearInterval(timerInterval);
+    if (gameMode === 'time') {
+        gameTimer = TIME_ATTACK_LIMIT;
+        statTimeContainer.classList.remove('hidden');
+    } else if (gameMode === 'sprint') {
+        gameTimer = 0;
+        statTimeContainer.classList.remove('hidden');
+    } else {
+        gameTimer = 0;
+        statTimeContainer.classList.add('hidden');
+    }
+    uiTime.innerText = formatTime(gameTimer);
+    
+    timerInterval = setInterval(() => {
+        if (!isPlaying || isPaused || isGameOver) return;
+        if (gameMode === 'time') {
+            gameTimer--;
+            uiTime.innerText = formatTime(gameTimer);
+            if (gameTimer <= 0) {
+                gameOver("หมดเวลา!");
+            }
+        } else if (gameMode === 'sprint') {
+            gameTimer++;
+            uiTime.innerText = formatTime(gameTimer);
+        }
+    }, 1000);
+    
+    isGameOver = false;
+    isPaused = false;
+    isPlaying = true;
+    
+    overlay.classList.add('hidden');
+    gameOverModal.classList.add('hidden');
+    document.getElementById('btn-pause-mobile').innerHTML = '<i class="fa-solid fa-pause mr-1"></i> พักเกม';
+    
+    nextPieceMatrix = null;
+    playerReset();
+    draw();
+    
+    lastTime = performance.now();
+    cancelAnimationFrame(requestID);
+    update(lastTime);
+}
+
+// Event Listeners for Game
+btnStart.addEventListener('click', () => {
+    if (isPaused) {
+        togglePause();
+    } else {
+        startGame();
+    }
+});
+
+btnPlayAgain.addEventListener('click', () => {
+    // Return to start screen to allow mode re-selection
+    gameOverModal.classList.add('hidden');
+    overlay.classList.remove('hidden');
+    modeSelection.classList.remove('hidden');
+    overlayTitle.innerText = "พร้อมไหม?";
+    overlayTitle.className = "text-2xl sm:text-4xl font-bold text-white mb-2 md:mb-4 drop-shadow-md";
+    overlaySubtitle.innerText = "เลือกโหมดและกดปุ่มเริ่มเกม";
+    btnStart.innerText = "เริ่มเกม (Start)";
+});
+
+document.addEventListener('keydown', event => {
+    // Prevent default scrolling for game keys
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
+        event.preventDefault();
+    }
+
+    if (isGameOver) return;
+
+    if (event.key === 'p' || event.key === 'P') {
+        togglePause();
+        return;
+    }
+
+    if (!isPlaying || isPaused) return;
+
+    switch(event.key) {
+        case 'ArrowLeft': playerMove(-1); break;
+        case 'ArrowRight': playerMove(1); break;
+        case 'ArrowDown': playerDrop(); break;
+        case 'ArrowUp': playerRotate(1); break;
+        case ' ': hardDrop(); break;
+    }
+    draw(); // Immediate visual feedback
+});
+
+// Canvas Touch Gestures for Mobile
+let touchStartX = 0;
+let touchStartY = 0;
+let touchLastX = 0;
+let touchLastY = 0;
+let touchStartTime = 0;
+const SWIPE_THRESHOLD = 30; // 30px per logical grid movement
+
+canvas.addEventListener('touchstart', (e) => {
+    if (!isPlaying || isPaused || isGameOver) return;
+    e.preventDefault(); // Prevent scrolling
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchLastX = touchStartX;
+    touchLastY = touchStartY;
+    touchStartTime = Date.now();
+}, {passive: false});
+
+canvas.addEventListener('touchmove', (e) => {
+    if (!isPlaying || isPaused || isGameOver) return;
+    e.preventDefault();
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    
+    const diffX = currentX - touchLastX;
+    const diffY = currentY - touchLastY;
+
+    // Horizontal sliding (Left/Right)
+    if (Math.abs(diffX) > SWIPE_THRESHOLD) {
+        if (diffX > 0) playerMove(1);
+        else playerMove(-1);
+        touchLastX = currentX; // Reset anchor for continuous movement
+        draw();
+    }
+    
+    // Soft Drop dragging down
+    if (diffY > SWIPE_THRESHOLD) {
+        playerDrop();
+        touchLastY = currentY;
+        draw();
+    }
+}, {passive: false});
+
+canvas.addEventListener('touchend', (e) => {
+    if (!isPlaying || isPaused || isGameOver) return;
+    e.preventDefault();
+    const timeDiff = Date.now() - touchStartTime;
+    const totalDiffX = e.changedTouches[0].clientX - touchStartX;
+    const totalDiffY = e.changedTouches[0].clientY - touchStartY;
+
+    // Tap to Rotate (Fast tap, very little finger movement)
+    if (timeDiff < 250 && Math.abs(totalDiffX) < 15 && Math.abs(totalDiffY) < 15) {
+        playerRotate(1);
+        draw();
+        return;
+    }
+
+    // Quick Swipe Down for Hard Drop
+    if (timeDiff < 300 && totalDiffY > 50 && Math.abs(totalDiffY) > Math.abs(totalDiffX)) {
+        hardDrop();
+        draw();
+    }
+});
+
+// Mobile Pause Button Handling
+const pauseBtnMobile = document.getElementById('btn-pause-mobile');
+const handleMobilePause = (e) => {
+    e.preventDefault();
+    if (isPlaying && !isGameOver) {
+        togglePause();
+    }
+};
+pauseBtnMobile.addEventListener('touchstart', handleMobilePause, {passive: false});
+pauseBtnMobile.addEventListener('click', handleMobilePause);
+
+// Initial Draw (Empty board)
+drawNextPiece();
+drawMatrix(ctx, createMatrix(COLS, ROWS), {x:0, y:0}, BLOCK_SIZE);
+</script>
+</body>
+</html>
